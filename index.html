@@ -15,7 +15,7 @@
     }
     body {
       font-family: 'Inter', Arial, sans-serif;
-      background: linear-gradient(135deg, #e6edff 0%, #f5f8ff 100%);
+      background: #fff;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -86,11 +86,12 @@
       font-weight: 400;
     }
     .input-row select {
-      width: 80px;
-      padding: 8px;
+      width: 130px;
+      min-width: 120px;
+      padding: 8px 12px;
       border-radius: 10px;
       border: 1px solid #e2e8f0;
-      font-size: 14px;
+      font-size: 15px;
       background: #ffffff;
       font-family: inherit;
       margin-left: 8px;
@@ -102,20 +103,24 @@
       outline: none;
     }
     .select2-container .select2-selection--single {
-      height: 36px;
+      height: 40px;
+      min-width: 120px;
+      width: 130px !important;
       display: flex;
       align-items: center;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
       background: #ffffff;
+      padding-right: 8px;
     }
     .select2-container--default .select2-selection--single .select2-selection__rendered {
-      line-height: 36px;
-      font-size: 14px;
+      line-height: 40px;
+      font-size: 15px;
       color: #1a1a1a;
+      padding-left: 6px;
     }
     .select2-container--default .select2-selection--single .select2-selection__arrow {
-      height: 36px;
+      height: 40px;
     }
     .rate-pill {
       display: inline-block;
@@ -238,19 +243,22 @@
         padding: 8px 0;
       }
       .input-row select {
-        width: 70px;
-        font-size: 13px;
-        padding: 6px;
+        width: 110px;
+        min-width: 100px;
+        font-size: 14px;
+        padding: 8px 10px;
       }
       .select2-container .select2-selection--single {
-        height: 32px;
+        height: 36px;
+        min-width: 100px;
+        width: 110px !important;
       }
       .select2-container--default .select2-selection--single .select2-selection__rendered {
-        line-height: 32px;
-        font-size: 13px;
+        line-height: 36px;
+        font-size: 14px;
       }
       .select2-container--default .select2-selection--single .select2-selection__arrow {
-        height: 32px;
+        height: 36px;
       }
       .rate-pill {
         font-size: 12px;
