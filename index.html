@@ -313,7 +313,7 @@
       </div>
     </div>
     <div id="delivery-window"></div>
-    <button id="send-btn">Send money</button>
+    <button id="send-btn" >Send money</button>
     <div id="loader" style="display:none;">
       <div class="loader-backdrop"></div>
       <div class="loader-spinner">
@@ -506,6 +506,10 @@
         updateDiscountNote();
         updateConversion();
         setTimeout(hideLoader, 350);
+      });
+
+      document.getElementById('send-btn').addEventListener('click', function(e) {
+        window.location.href = 'https://app.spennx.com/register/create_account';
       });
     });
 
