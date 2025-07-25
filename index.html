@@ -6,7 +6,7 @@
   <title>Currency Converter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons/css/flag-icons.min.css">
   <style>
@@ -14,7 +14,7 @@
       box-sizing: border-box;
     }
     body {
-      font-family: 'Inter', Arial, sans-serif;
+      font-family: 'Poppins', Arial, sans-serif;
       background: #fff;
       display: flex;
       justify-content: center;
@@ -34,6 +34,7 @@
       margin: 0 auto;
       border: 1px solid #e8ecef;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+      font-family: 'Poppins', Arial, sans-serif;
     }
     #converter:hover {
       transform: translateY(-2px);
@@ -67,6 +68,7 @@
       font-weight: 500;
       color: #1e40af;
       margin-right: 8px;
+      font-family: 'Poppins', Arial, sans-serif;
     }
     .input-row input[type="number"],
     .input-row input[type="text"] {
@@ -79,6 +81,7 @@
       padding: 10px 0;
       text-align: right;
       outline: none;
+      font-family: 'Poppins', Arial, sans-serif;
     }
     .input-row input[type="number"]::-webkit-input-placeholder,
     .input-row input[type="text"]::-webkit-input-placeholder {
@@ -137,6 +140,7 @@
       margin-left: auto;
       margin-right: auto;
       display: block;
+      font-family: 'Poppins', Arial, sans-serif;
     }
     .discount-note {
       background: #f0f4ff;
@@ -160,7 +164,7 @@
       color: #ffffff;
       cursor: pointer;
       transition: background 0.2s ease, transform 0.2s ease;
-      font-family: inherit;
+      font-family: 'Poppins', Arial, sans-serif;
     }
     #send-btn:hover {
       background: linear-gradient(90deg, #3b82f6 0%, #1e40af 100%);
@@ -633,9 +637,11 @@
     function updateConversion() {
       const amount = parseFloat(amountEl.value);
       if (currentRate && amount && (!minSend || amount >= minSend) && (!maxSend || amount <= maxSend)) {
-        const converted = (amount * currentRate).toFixed(2);
-        convertedAmountEl.value = converted;
-        rateInfoEl.textContent = `1 ${currentSendCurrency || ''} = ${currentRate} ${currentReceiveCurrency || ''}`;
+        const converted = (amount * currentRate);
+        // Format with comma separators
+        convertedAmountEl.value = converted.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        // Also format the input value if needed (optional, but not to interfere with typing)
+        rateInfoEl.textContent = `1 ${currentSendCurrency || ''} = ${Number(currentRate).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${currentReceiveCurrency || ''}`;
         if (currentDeliveryWindow && currentDeliveryWindow.duration) {
           deliveryWindowEl.textContent = `Estimated delivery: ${currentDeliveryWindow.duration}`;
         } else {
