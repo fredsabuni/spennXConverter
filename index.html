@@ -422,26 +422,31 @@
         opt.setAttribute('data-flag', c.flag);
         sendCountryEl.appendChild(opt);
       });
-      const defaultSender = 'NG';
+      const defaultSender = 'US';
       if ([...sendCountryEl.options].some(opt => opt.value === defaultSender)) {
         sendCountryEl.value = defaultSender;
       }
-      sendCountryEl.dispatchEvent(new Event('change'));
+      
+      // Initialize Select2 first, then trigger the change event
+      $('#send-country').select2({
+        templateResult: function (state) {
+          if (!state.id) return state.text;
+          var flag = $(state.element).data('flag');
+          return $('<span><span class="fi fi-' + flag + '" style="margin-right:8px;"></span>' + state.text + '</span>');
+        },
+        templateSelection: function (state) {
+          if (!state.id) return state.text;
+          var flag = $(state.element).data('flag');
+          return $('<span><span class="fi fi-' + flag + '" style="margin-right:8px;"></span>' + state.text + '</span>');
+        },
+        minimumResultsForSearch: -1
+      });
+      
+      // Trigger the change event after Select2 is initialized to make the API call
       setTimeout(() => {
-        $('#send-country').select2({
-          templateResult: function (state) {
-            if (!state.id) return state.text;
-            var flag = $(state.element).data('flag');
-            return $('<span><span class="fi fi-' + flag + '" style="margin-right:8px;"></span>' + state.text + '</span>');
-          },
-          templateSelection: function (state) {
-            if (!state.id) return state.text;
-            var flag = $(state.element).data('flag');
-            return $('<span><span class="fi fi-' + flag + '" style="margin-right:8px;"></span>' + state.text + '</span>');
-          },
-          minimumResultsForSearch: -1
-        });
-      }, 0);
+        console.log('Triggering initial API call for default currency:', defaultSender);
+        $('#send-country').trigger('change');
+      }, 100);
     }
 
     function updateSenderCurrencyLabel(currency) {
@@ -459,21 +464,22 @@
     }
 
     $(document).ready(function() {
+      // Set up the change event handler first
       $('#send-country').on('change', function() {
         const iso2 = this.value;
         currentSendCurrency = iso2;
+        console.log('Send country changed to:', iso2);
+        
         // Get currency from selected option
         const selectedOpt = this.options[this.selectedIndex];
         const senderCurrency = selectedOpt.getAttribute('data-currency') || '';
         updateSenderCurrencyLabel(senderCurrency);
         showLoader();
-        fetchWithToken(`${API_BASE}/currencies/${iso2}`).then(res => { 
-          // Debug: log the API response for NG
-          if (iso2 === 'NG') {
-            console.log('API response for NG:', res);
-          }
-          let matchedObj = null;
-          // Handle both array and object responses
+        
+        fetchWithToken(`${API_BASE}/currencies/${iso2}`).then(res => {  
+          console.log(`API response for ${iso2}:`, res);
+          
+          let matchedObj = null; 
           if (Array.isArray(res)) {
             for (let obj of res) {
               if (obj.currency === senderCurrency) {
@@ -481,8 +487,7 @@
                 break;
               }
             }
-          } else if (res && typeof res === 'object') {
-            // If response is an object with data property
+          } else if (res && typeof res === 'object') { 
             if (Array.isArray(res.data)) {
               for (let obj of res.data) {
                 if (obj.currency === senderCurrency) {
@@ -490,15 +495,15 @@
                   break;
                 }
               }
-              // Fallback to first if not found
               if (!matchedObj && res.data.length > 0) {
                 matchedObj = res.data[0];
               }
             } else if (res.currency === senderCurrency) {
               matchedObj = res;
+            } else if (res && res.settings) {
+              matchedObj = res;
             }
           }
-          // Fallback: if still not found, try first available object
           if (!matchedObj) {
             if (Array.isArray(res) && res.length > 0) {
               matchedObj = res[0];
@@ -506,34 +511,108 @@
               matchedObj = res.data[0];
             }
           }
+          
+          console.log(`Matched object for ${iso2}:`, matchedObj);
+          
           const intl = matchedObj?.settings?.international_remittance || [];
+          console.log(`International remittance data for ${iso2}:`, intl);
+          
           ratesMap = {};
           receiveCountryEl.innerHTML = "";
           
           // Filter for unique currencies from their origin countries
           const uniqueCurrencies = new Map();
           
-          intl.forEach(item => {
+          console.log('Processing international remittance items...');
+          intl.forEach((item, index) => {
             const currency = item.currency;
             const itemIso2 = (item.iso2 || item.country_iso2 || '').toUpperCase();
             const originCountry = currencyToCountryMap[currency];
             
-            // Only include if:
-            // 1. We have a mapping for this currency
-            // 2. The item's iso2 matches the currency's origin country
-            // 3. We haven't seen this currency before
-            if (originCountry && itemIso2 === originCountry && !uniqueCurrencies.has(currency)) {
-              uniqueCurrencies.set(currency, {
+            console.log(`Item ${index}: currency=${currency}, itemIso2=${itemIso2}, originCountry=${originCountry}, rate=${item.rate}, hasLimit=${!!item.limit}, hasDeliveryWindows=${!!item.delivery_windows}`);
+            
+            // More flexible matching - prioritize currency mapping over iso2 matching
+            if (originCountry) {
+              const itemToAdd = {
                 ...item,
-                iso2: originCountry // Ensure we use the correct origin country iso2
-              });
+                iso2: originCountry // Use the mapped country iso2
+              };
+              
+              // If we already have this currency, compare and keep the better one
+              if (uniqueCurrencies.has(currency)) {
+                const existing = uniqueCurrencies.get(currency);
+                console.log(`Currency ${currency} already exists. Comparing...`);
+                console.log(`Existing: rate=${existing.rate}, hasLimit=${!!existing.limit}, hasDeliveryWindows=${!!existing.delivery_windows}`);
+                console.log(`New: rate=${item.rate}, hasLimit=${!!item.limit}, hasDeliveryWindows=${!!item.delivery_windows}`);
+                
+                const shouldReplace = 
+                  (!existing.rate && item.rate) ||  
+                  (existing.rate && item.rate && item.rate > 0 && (!existing.rate || existing.rate <= 0)) ||  
+                  (itemIso2 === originCountry && (existing.iso2 !== originCountry || !existing.rate)) || 
+                  (!existing.limit && item.limit) ||  
+                  (!existing.delivery_windows && item.delivery_windows);  
+                
+                if (shouldReplace) {
+                  console.log(`✅ Replacing existing ${currency} with better data`);
+                  uniqueCurrencies.set(currency, itemToAdd);
+                } else {
+                  console.log(`⏭️ Keeping existing ${currency} data`);
+                }
+              } else {
+                console.log(`✅ Adding new currency ${currency} to dropdown`);
+                uniqueCurrencies.set(currency, itemToAdd);
+              }
+            } else {
+              console.log(`❌ Skipping currency ${currency}: no origin country mapping found`);
             }
           });
           
+          console.log('Final unique currencies:', Array.from(uniqueCurrencies.keys()));
+          console.log('Final unique currencies with details:', Array.from(uniqueCurrencies.entries()).map(([currency, data]) => ({
+            currency, 
+            rate: data.rate, 
+            iso2: data.iso2,
+            hasLimit: !!data.limit,
+            hasDeliveryWindows: !!data.delivery_windows
+          })));
+          
           // Convert Map to array and sort by currency code
-          const filteredItems = Array.from(uniqueCurrencies.values()).sort((a, b) => a.currency.localeCompare(b.currency));
+          let filteredItems = Array.from(uniqueCurrencies.values()).sort((a, b) => a.currency.localeCompare(b.currency));
+          
+          console.log(`Filtered items count: ${filteredItems.length}`);
+          if (filteredItems.length > 0) {
+            console.log('Sample filtered items:', filteredItems.slice(0, 5).map(item => ({
+              currency: item.currency,
+              rate: item.rate,
+              iso2: item.iso2,
+              hasLimit: !!item.limit
+            })));
+          }
+          
+          // If no filtered items, add all available currencies as fallback
+          if (filteredItems.length === 0 && intl.length > 0) {
+            console.log('No filtered items found, adding all available currencies as fallback');
+            uniqueCurrencies.clear(); // Clear the map first
+            intl.forEach(item => {
+              const currency = item.currency;
+              if (!uniqueCurrencies.has(currency)) {
+                // Use the item's iso2 or fallback to currency mapping
+                const itemIso2 = (item.iso2 || item.country_iso2 || '').toUpperCase();
+                const fallbackIso2 = currencyToCountryMap[currency] || itemIso2 || currency.substring(0, 2);
+                
+                console.log(`Fallback: Adding ${currency} with iso2: ${fallbackIso2}`);
+                uniqueCurrencies.set(currency, {
+                  ...item,
+                  iso2: fallbackIso2
+                });
+              }
+            });
+            filteredItems = Array.from(uniqueCurrencies.values()).sort((a, b) => a.currency.localeCompare(b.currency));
+            console.log('Fallback filtered items:', filteredItems.length);
+          }
           
           // Populate the dropdown with filtered unique currencies
+          console.log('Populating dropdown with', filteredItems.length, 'items');
           filteredItems.forEach(item => {
             const opt = document.createElement("option");
             opt.value = item.iso2;
@@ -542,13 +621,22 @@
             opt.setAttribute('data-flag', flagIso);
             receiveCountryEl.appendChild(opt);
             ratesMap[item.iso2] = item;
+            console.log(`Added to dropdown: ${item.currency} (${item.iso2})`);
           });
+          
+          console.log('RatesMap after population:', Object.keys(ratesMap));
           // Destroy previous Select2 instance if exists
           if ($.fn.select2 && $('#receive-country').data('select2')) {
             $('#receive-country').select2('destroy');
           }
           // Initialize Select2 for receiver dropdown with flag and currency
           setTimeout(() => {
+            if (filteredItems.length > 0) {
+              // Auto-select the first receive country before initializing Select2
+              receiveCountryEl.value = filteredItems[0].iso2;
+              console.log('Auto-selected receive country:', filteredItems[0].iso2, filteredItems[0].currency);
+            }
+            
             $('#receive-country').select2({
               templateResult: function (state) {
                 if (!state.id) return state.text;
@@ -562,20 +650,29 @@
               },
               minimumResultsForSearch: -1
             });
-          }, 0);
+            
+            // Trigger change event after Select2 is initialized
+            if (filteredItems.length > 0) {
+              console.log('Triggering change event for receive country');
+              $('#receive-country').trigger('change');
+            }
+          }, 100);
           // Set min/max from the first available filtered recipient (if any)
           if (filteredItems.length > 0) {
             const first = filteredItems[0];
             minSend = first.limit?.min || null;
             maxSend = first.limit?.max || null;
+            console.log('Set min/max from first item:', {minSend, maxSend, currency: first.currency});
           } else {
             minSend = null;
             maxSend = null;
+            console.log('No filtered items, min/max set to null');
           }
           updateMinMaxNote();
           updateDiscountNote();
-          // Trigger update
-          receiveCountryEl.dispatchEvent(new Event('change'));
+          hideLoader();
+        }).catch(error => {
+          console.error('Error fetching currency data:', error);
           hideLoader();
         });
       });
@@ -584,12 +681,20 @@
         showLoader();
         const iso2 = this.value;
         const item = ratesMap[iso2];
+        console.log(`Receive country changed to: ${iso2}`);
+        console.log(`Looking for item in ratesMap with key: ${iso2}`);
+        console.log(`Found item:`, item);
+        
         if (item) {
           currentRate = item.rate;
           currentReceiveCurrency = item.currency;
           currentReceiveCountry = item.country;
           minSend = item.limit?.min || null;
           maxSend = item.limit?.max || null;
+          
+          console.log(`Set current values: rate=${currentRate}, currency=${currentReceiveCurrency}, country=${currentReceiveCountry}`);
+          console.log(`Set limits: min=${minSend}, max=${maxSend}`);
+          
           if (item.delivery_windows && item.delivery_windows.length > 0) {
             let fastest = item.delivery_windows[0];
             for (let win of item.delivery_windows) {
@@ -598,10 +703,13 @@
               }
             }
             currentDeliveryWindow = fastest;
+            console.log(`Set delivery window:`, currentDeliveryWindow);
           } else {
             currentDeliveryWindow = null;
+            console.log('No delivery windows found');
           }
         } else {
+          console.log(`❌ No item found in ratesMap for ${iso2}`);
           currentRate = null;
           currentReceiveCurrency = null;
           currentReceiveCountry = null;
@@ -616,6 +724,9 @@
       document.getElementById('send-btn').addEventListener('click', function(e) {
         window.location.href = 'https://app.spennx.com/register/create_account';
       });
+      
+      // Initialize the send countries dropdown and trigger initial API call
+      populateSendCountries();
     });
 
     function updateMinMaxNote() {
@@ -636,26 +747,97 @@
 
     function updateConversion() {
       const amount = parseFloat(amountEl.value);
+      console.log(`🔄 updateConversion called:`);
+      console.log(`  - Send amount: ${amount}`);
+      console.log(`  - Current rate: ${currentRate}`);
+      console.log(`  - Min send: ${minSend}, Max send: ${maxSend}`);
+      console.log(`  - Current receive currency: ${currentReceiveCurrency}`);
+      
+      // Clear any previous error messages
+      const existingError = document.getElementById('limit-error');
+      if (existingError) {
+        existingError.remove();
+      }
+      
       if (currentRate && amount && (!minSend || amount >= minSend) && (!maxSend || amount <= maxSend)) {
         const converted = (amount * currentRate);
-        // Format with comma separators
-        convertedAmountEl.value = converted.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        // Also format the input value if needed (optional, but not to interfere with typing)
-        rateInfoEl.textContent = `1 ${currentSendCurrency || ''} = ${Number(currentRate).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${currentReceiveCurrency || ''}`;
+        const roundedConverted = Math.round(converted);
+        
+        console.log(`  ✅ Conversion successful:`);
+        console.log(`    - Raw converted amount: ${converted}`);
+        console.log(`    - Rounded converted amount: ${roundedConverted}`);
+        console.log(`    - Formatted converted amount: ${roundedConverted.toLocaleString()}`);
+        
+        // Format with comma separators, no decimal places
+        convertedAmountEl.value = roundedConverted.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        
+        // Get the sender currency for display
+        const selectedSendOpt = sendCountryEl.options[sendCountryEl.selectedIndex];
+        const senderCurrency = selectedSendOpt?.getAttribute('data-currency') || currentSendCurrency || '';
+        
+        // Format the rate with no decimal places
+        const formattedRate = Math.round(currentRate).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        rateInfoEl.textContent = `1 ${senderCurrency} = ${formattedRate} ${currentReceiveCurrency || ''}`;
+        
+        console.log(`    - Rate display: 1 ${senderCurrency} = ${formattedRate} ${currentReceiveCurrency || ''}`);
+        
         if (currentDeliveryWindow && currentDeliveryWindow.duration) {
           deliveryWindowEl.textContent = `Estimated delivery: ${currentDeliveryWindow.duration}`;
+          console.log(`    - Delivery: ${currentDeliveryWindow.duration}`);
         } else {
           deliveryWindowEl.textContent = '';
+          console.log(`    - No delivery window`);
         }
       } else {
+        console.log(`  ❌ Conversion failed - conditions not met:`);
+        console.log(`    - Has rate: ${!!currentRate}`);
+        console.log(`    - Has amount: ${!!amount}`);
+        console.log(`    - Amount >= min: ${!minSend || amount >= minSend} (min: ${minSend})`);
+        console.log(`    - Amount <= max: ${!maxSend || amount <= maxSend} (max: ${maxSend})`);
+        
         convertedAmountEl.value = '';
         rateInfoEl.textContent = '';
         deliveryWindowEl.textContent = '';
+        
+        // Show specific error message for limit violations
+        if (currentRate && amount) {
+          let errorMessage = '';
+          const senderCurrency = sendCountryEl.options[sendCountryEl.selectedIndex]?.getAttribute('data-currency') || '';
+          
+          if (minSend && amount < minSend) {
+            errorMessage = `⚠️ Minimum send amount is ${minSend} ${senderCurrency}. Please increase your amount.`;
+          } else if (maxSend && amount > maxSend) {
+            errorMessage = `⚠️ Maximum send amount is ${maxSend} ${senderCurrency}. Please decrease your amount.`;
+          }
+          
+          if (errorMessage) {
+            // Create and show error message
+            const errorDiv = document.createElement('div');
+            errorDiv.id = 'limit-error';
+            errorDiv.style.cssText = `
+              background: #fef2f2;
+              color: #dc2626;
+              padding: 8px 12px;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 500;
+              margin: 8px 0;
+              border: 1px solid #fecaca;
+              text-align: center;
+            `;
+            errorDiv.textContent = errorMessage;
+            
+            // Insert after the amount input
+            const amountGroup = document.querySelector('.input-group');
+            amountGroup.appendChild(errorDiv);
+            
+            console.log(`  📢 Showing limit error: ${errorMessage}`);
+          }
+        }
       }
     }
 
     amountEl.addEventListener("input", updateConversion);
-    populateSendCountries();
   </script>
 </body>
 </html>
