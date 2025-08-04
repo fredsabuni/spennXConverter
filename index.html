@@ -317,7 +317,7 @@
       </div>
     </div>
     <div id="delivery-window"></div>
-    <button id="send-btn" >Send money</button>
+    <a href="https://app.spennx.com/" id="send-btn" style="display: flex; align-items: center; justify-content: center; text-decoration: none;">Send money</a>
     <div id="loader" style="display:none;">
       <div class="loader-backdrop"></div>
       <div class="loader-spinner">
@@ -721,10 +721,6 @@
         setTimeout(hideLoader, 350);
       });
 
-      document.getElementById('send-btn').addEventListener('click', function(e) {
-        window.location.href = 'https://app.spennx.com/register/create_account';
-      });
-      
       // Initialize the send countries dropdown and trigger initial API call
       populateSendCountries();
     });
