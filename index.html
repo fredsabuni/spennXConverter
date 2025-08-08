@@ -770,11 +770,11 @@
         const selectedSendOpt = sendCountryEl.options[sendCountryEl.selectedIndex];
         const senderCurrency = selectedSendOpt?.getAttribute('data-currency') || currentSendCurrency || '';
         
-        // Format the rate with no decimal places
-        const formattedRate = Math.round(currentRate).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        // Format the rate with 3 decimal places
+        const formattedRate = currentRate.toLocaleString(undefined, {minimumFractionDigits: 3, maximumFractionDigits: 3});
         rateInfoEl.textContent = `1 ${senderCurrency} = ${formattedRate} ${currentReceiveCurrency || ''}`;
-        
-        console.log(`    - Rate display: 1 ${senderCurrency} = ${formattedRate} ${currentReceiveCurrency || ''}`);
+
+        console.log(`      - Rate display: 1 ${senderCurrency} = ${formattedRate} ${currentReceiveCurrency || ''}`);
         
         if (currentDeliveryWindow && currentDeliveryWindow.duration) {
           deliveryWindowEl.textContent = `Estimated delivery: ${currentDeliveryWindow.duration}`;
